@@ -41,47 +41,75 @@ def available_values(column_name: str) -> list[str]:
     )
 
 
-st.sidebar.header("ตัวกรอง")
+def apply_multi_keyword_search(
+    frame: pd.DataFrame,
+    search_text: str,
+) -> pd.DataFrame:
+    keywords = [
+        keyword.casefold()
+        for keyword in search_text.split()
+        if keyword.strip()
+    ]
 
-search_text = st.sidebar.text_input(
-    "ค้นหาทุกคอลัมน์",
-    placeholder="ชื่อเล่น โรงเรียน จังหวัด...",
-)
+    if not keywords:
+        return frame
 
-province_filter = st.sidebar.multiselect(
-    "จังหวัด",
-    available_values("จังหวัด"),
-)
-
-school_filter = st.sidebar.multiselect(
-    "โรงเรียนเดิม",
-    available_values("โรงเรียนเดิม"),
-)
-
-study_filter = st.sidebar.multiselect(
-    "สายการเรียน",
-    available_values("สายการเรียน"),
-)
-
-personality_filter = st.sidebar.multiselect(
-    "แท็กบุคลิก",
-    available_values("แท็กบุคลิก"),
-)
-
-filtered_data = data.copy()
-
-if search_text:
-    search_text = search_text.casefold()
-
-    search_mask = filtered_data.astype(str).apply(
-        lambda row: row.str.casefold().str.contains(
-            search_text,
-            regex=False,
-        ).any(),
+    searchable_rows = frame.astype(str).apply(
+        lambda row: " ".join(row).casefold(),
         axis=1,
     )
 
-    filtered_data = filtered_data[search_mask]
+    mask = pd.Series(True, index=frame.index)
+
+    for keyword in keywords:
+        mask &= searchable_rows.str.contains(
+            keyword,
+            regex=False,
+            na=False,
+        )
+
+    return frame[mask]
+
+
+st.subheader("ค้นหาและกรองข้อมูล")
+
+search_text = st.text_input(
+    "ค้นหาหลายคำ",
+    placeholder="เช่น สวน กรุง",
+    help=(
+        "พิมพ์หลายคำคั่นด้วยช่องว่าง "
+        "ระบบจะแสดงเฉพาะแถวที่พบครบทุกคำ"
+    ),
+)
+
+filter_column_1, filter_column_2 = st.columns(2)
+
+with filter_column_1:
+    province_filter = st.multiselect(
+        "จังหวัด",
+        available_values("จังหวัด"),
+    )
+
+    school_filter = st.multiselect(
+        "โรงเรียนเดิม",
+        available_values("โรงเรียนเดิม"),
+    )
+
+with filter_column_2:
+    study_filter = st.multiselect(
+        "สายการเรียน",
+        available_values("สายการเรียน"),
+    )
+
+    personality_filter = st.multiselect(
+        "แท็กบุคลิก",
+        available_values("แท็กบุคลิก"),
+    )
+
+filtered_data = apply_multi_keyword_search(
+    data,
+    search_text,
+)
 
 if province_filter and "จังหวัด" in filtered_data.columns:
     filtered_data = filtered_data[
@@ -103,6 +131,7 @@ if personality_filter and "แท็กบุคลิก" in filtered_data.colu
         filtered_data["แท็กบุคลิก"].isin(personality_filter)
     ]
 
+st.divider()
 st.write(f"พบข้อมูล **{len(filtered_data)} คน**")
 
 for _, person in filtered_data.iterrows():
@@ -115,7 +144,10 @@ for _, person in filtered_data.iterrows():
 
         with image_column:
             if profile_url.startswith(("http://", "https://")):
-                st.image(profile_url, use_container_width=True)
+                st.image(
+                    profile_url,
+                    use_container_width=True,
+                )
             else:
                 st.info("ไม่มีรูปโปรไฟล์")
 
